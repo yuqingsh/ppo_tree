@@ -1,0 +1,10 @@
+__pycache__/
+.__pytest_cache/
+.vscode/
+*.pyc
+bounding_boxes/
+classification/
+grids/
+points/
+*.tif
+ppo_tree_proj.qgz

@@ -1,0 +1,34 @@
+数据：一张正射影像+单木顶点数据+矩形框数据
+
+点的属性：树高，冠幅，胸径。   奖励函数除了考虑空间指标。树高，冠幅，胸径越低说明树的优势度低。
+之前代码写的很乱，顶点属性表里目前没有冠幅，冠幅就是计算矩形框中类别1的面积，把矩形框和点的ID空间连接就能对应上。
+# 冠幅计算
+    def calculate_canopy_width(self):
+        # for i, row in self.gdf_boxes.iterrows():
+        #     geom = row['geometry']
+        #     mask = geometry_mask([mapping(geom)],out_shape=self.image_data.shape[1:], transform=self.transform, invert=True, all_touched=True)
+        #     guanfu = np.sum(self.image_data[0, mask] == 1) * self.resolution * self.resolution  # 假定关注的是第一个波段
+        #     self.gdf_boxes.loc[i, 'guanfu'] = guanfu
+        with rasterio.open(self.raster_path) as src:
+            for i, row in self.gdf_boxes.iterrows():
+                geom = row['geometry']
+                out_image, out_transform = mask(src, [geom], crop=True, all_touched=True)
+                guanfu = (out_image == 1).sum() * self.resolution * self.resolution
+                self.gdf_boxes.loc[i, 'guanfu'] = guanfu
+
+
+奖励函数：w1*空间指标- w2*（w3 * 树高 + w4胸径 + w5冠幅）  #这里w1-w5我的疑问是如果作为目标函数应该是要一个具体的值吧？
+作为可学习的参数是不是正确的？
+这里是否有更好的方式实现下面的砍伐原则
+
+砍伐的原则：砍密集的+砍弱势的（只砍类别1的树），现有的空间指标我个人感觉并不准确，还不如使用聚集度+（w1 * 树高 + w2胸径 + w3冠幅）确定。
+约束：砍伐的上限不超过1500棵，郁闭度不低于0.7.（郁闭度的计算是用类别1的覆盖面积/类别1+2+3的覆盖面积）
+
+砍伐动作：被设定为需要砍伐的点时，在空间上去掉该点对应矩形框内类别1的像素，将类别1转为类别4（地面）
+（砍伐顺序需要记录下来）
+
+#空间指标目前没有确定，我发你一个之前用过的指标之一，在《空间指标其中之一》文件夹下
+
+
+
+
