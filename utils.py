@@ -1,7 +1,6 @@
 import rasterio
 import numpy as np
-from shapely.geometry import box, Polygon
-from rasterio.mask import mask
+from sklearn.neighbors import NearestNeighbors
 import geopandas as gpd
 import os
 import math
@@ -19,7 +18,7 @@ class ForestManager:
     def __init__(self, raster_path):
         self.trees, self.bboxes = self.read_data()
         self.trees["is_cut"] = False
-        # self.update_angle_index()
+        self.update_angle_index()
 
         with rasterio.open(raster_path) as src:
             self.crs = src.crs
@@ -44,18 +43,19 @@ class ForestManager:
         )
 
     def update_angle_index(self):
-        def distance(p1, p2):
-            return math.sqrt((p2[0] - p1[0]) ** 2 + (p2[1] - p1[1]) ** 2)
+        n_angles = 3
+        n_neighbors = 4
 
-        def dot_product(v1, v2):
+        def _dot_product(v1, v2):
             return v1[0] * v2[0] + v1[1] * v2[1]
 
-        def angle(v1, v2):
-            dot = dot_product(v1, v2)
-            v1_mag = math.sqrt(dot_product(v1, v1))
-            v2_mag = math.sqrt(dot_product(v2, v2))
+        def _angle(v1, v2):
+            dot = _dot_product(v1, v2)
+
+            v1_mag = math.sqrt(_dot_product(v1, v1))
+            v2_mag = math.sqrt(_dot_product(v2, v2))
             if v1_mag < 1e-6 or v2_mag < 1e-6:
-                return 0
+                return 0.0
             cos_theta = dot / (v1_mag * v2_mag)
             cos_theta = max(-1.0, min(1.0, cos_theta))
             theta = math.acos(cos_theta)
@@ -64,72 +64,69 @@ class ForestManager:
                 theta = 2 * math.pi - theta
             return theta
 
-        def count_angle(points_dict):
-            points = list(points_dict.values())
-            count_list = []
-            for i, p in tqdm(enumerate(points), total=len(points)):
-                distances = [
-                    (distance(p, other), j) for j, other in enumerate(points) if j != i
-                ]
-                distances.sort()
-                nearest_point_index = [i for dis, i in distances[:4]]
-                angles = []
-                for j in range(len(nearest_point_index) - 1):
-                    v1 = (
-                        points[nearest_point_index[0]][0] - p[0],
-                        points[nearest_point_index[0]][1] - p[1],
-                    )
-                    v2 = (
-                        points[nearest_point_index[j + 1]][0] - p[0],
-                        points[nearest_point_index[j + 1]][1] - p[1],
-                    )
-                    angles.append((angle(v1, v2), nearest_point_index[j + 1]))
-                angles.sort()
-                angles_index = [i for ang, i in angles[:3]]
-                angles_index.insert(0, nearest_point_index[0])
-                count = 0
-                for k in range(len(angles_index)):
-                    if k <= len(nearest_point_index) - 2:
-                        v1 = (
-                            points[angles_index[k]][0] - p[0],
-                            points[angles_index[k]][1] - p[1],
-                        )
-                        v2 = (
-                            points[angles_index[k + 1]][0] - p[0],
-                            points[angles_index[k + 1]][1] - p[1],
-                        )
-                    elif k == len(nearest_point_index) - 1:
-                        v1 = (
-                            points[angles_index[k]][0] - p[0],
-                            points[angles_index[k]][1] - p[1],
-                        )
-                        v2 = (
-                            points[angles_index[0]][0] - p[0],
-                            points[angles_index[0]][1] - p[1],
-                        )
-                    if angle(v1, v2) > math.radians(279):
-                        count = 10
-                        break
-                    elif angle(v1, v2) >= math.radians(81):
-                        count += 1
-                count_list.append(count)
-            count_np = np.array(count_list)
-            count_np = np.where(count_np == 3, 0.25, count_np)
-            count_np = np.where(count_np == 2, 0.5, count_np)
-            count_np = np.where(count_np == 1, 0.75, count_np)
-            count_np = np.where(count_np == 10, 1, count_np)
-            count_np = np.where(count_np == 4, 0, count_np)
-            points_dict = {
-                key: value for key, value in zip(points_dict.keys(), count_np)
-            }
-            return points_dict
-
         coordinates_dict = {}
         for row in self.trees.itertuples():
             if not row.is_cut:
                 coordinates_dict[row.Index] = (row.geometry.x, row.geometry.y)
-        points_dict = count_angle(coordinates_dict)
-        self.trees["angle_index"] = self.trees.index.map(points_dict)
+        coordinates = list(coordinates_dict.values())
+        points = np.array(coordinates)
+
+        if len(points) < n_neighbors:
+            n_neighbors = len(points)
+        nbrs = NearestNeighbors(n_neighbors=n_neighbors).fit(points)
+        distances, indices = nbrs.kneighbors(points)
+
+        count_list = []
+        for i in range(len(points)):
+            p = points[i]
+            nearest_indices = indices[i]
+
+            vectors = points[nearest_indices] - p
+            angles = []
+            for j in range(len(nearest_indices)):
+                ang = _angle(vectors[0], vectors[j])
+                angles.append((ang, nearest_indices[j]))
+
+            angles.sort()
+            selected_indices = [nearest_indices[0]] + [
+                idx for ang, idx in angles[1 : n_angles + 1]
+            ]
+
+            count = 0
+            num_pairs = len(selected_indices)
+            for k in range(num_pairs):
+                current_idx = selected_indices[k]
+                next_idx = selected_indices[(k + 1) % num_pairs]
+
+                v1 = points[current_idx] - p
+                v2 = points[next_idx] - p
+
+                ang = _angle(v1, v2)
+                if ang > math.radians(279):
+                    count = 10
+                    break
+                elif ang >= math.radians(81):
+                    count += 1
+
+            count_list.append(count)
+
+        count_np = np.array(count_list)
+        count_np = np.select(
+            [
+                (count_np == 3),
+                (count_np == 2),
+                (count_np == 1),
+                (count_np == 10),
+                (count_np == 4),
+            ],
+            [0.25, 0.5, 0.75, 1.0, 0.0],
+            default=count_np,
+        )
+
+        angle_dict = {
+            idx: count for idx, count in zip(coordinates_dict.keys(), count_np)
+        }
+        self.trees["angle_index"] = self.trees.index.map(angle_dict)
 
     def update_canopy_closure(self):
         with rasterio.open(self.raster_path) as src:
@@ -148,7 +145,7 @@ class ForestManager:
             mask = (data == 1) & (data != src.nodata)
             data[mask] = 4
             src.write(data, 1, window=window)
-        # self.update_angle_index()
+        self.update_angle_index()
         self.update_canopy_closure()
 
 
