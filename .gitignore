@@ -8,3 +8,5 @@ grids/
 points/
 *.tif
 ppo_tree_proj.qgz
+data/
+temp/

@@ -1,7 +1,13 @@
 # test_forest_env.py
 import pytest
 import numpy as np
-from envs import GridState, ActionSpace, RewardFunction, ForestLoggingEnv, MAX_TREE_CUT
+from envs_bp import (
+    GridState,
+    ActionSpace,
+    RewardFunction,
+    ForestLoggingEnv,
+    MAX_TREE_CUT,
+)
 
 
 @pytest.fixture
