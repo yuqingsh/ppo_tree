@@ -18,10 +18,12 @@ class ForestManager:
     def __init__(self, raster_path):
         self.trees, self.bboxes = self.read_data()
         self.trees["is_cut"] = False
+        self.calculate_crown_width()
         self.update_angle_index()
 
         with rasterio.open(raster_path) as src:
             self.crs = src.crs
+            self.bounds = src.bounds
 
         temp_raster_path = os.path.join("temp", "temp_raster.tif")
 
@@ -133,8 +135,18 @@ class ForestManager:
             valid_pixels = src.read(1) != src.nodata
             total_valid_pixels = valid_pixels.sum()
             counts = {val: (src.read(1) == val).sum() for val in range(1, 5)}
-            yubidu = sum(counts[val] for val in range(1, 4)) / total_valid_pixels
+            yubidu = sum(counts[val] for val in range(1, 4)) / sum(
+                counts[val] for val in range(1, 5)
+            )
             self.yubidu = yubidu
+
+    def calculate_crown_width(self):
+        crown_width = []
+        for row in self.bboxes.itertuples():
+            bbox = row.geometry
+            left, bottom, right, top = bbox.bounds
+            crown_width.append((right - left) * (top - bottom))
+        self.trees["guanfu"] = crown_width
 
     def harvest_tree(self, tree_id):
         self.trees.loc[tree_id, "is_cut"] = True
@@ -147,6 +159,23 @@ class ForestManager:
             src.write(data, 1, window=window)
         self.update_angle_index()
         self.update_canopy_closure()
+
+    def get_sum_angle_index(self):
+        running_total = 0
+        for row in self.trees.itertuples():
+            if not row.is_cut:
+                running_total += abs(row.angle_index - 0.5)
+        return running_total
+
+    def get_stats(self):
+        return {
+            "max_chm_min": self.trees["max_chm"].min(),
+            "max_chm_max": self.trees["max_chm"].max(),
+            "xiongjing_min": self.trees["xiongjing"].min(),
+            "xiongjing_max": self.trees["xiongjing"].max(),
+            "guanfu_min": self.trees["guanfu"].min(),
+            "guanfu_max": self.trees["guanfu"].max(),
+        }
 
 
 def main():
