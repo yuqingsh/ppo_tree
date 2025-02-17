@@ -10,5 +10,5 @@ points/
 ppo_tree_proj.qgz
 data/
 temp/
-log/
+logs/PPO*/
 models/

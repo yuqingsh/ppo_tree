@@ -4,8 +4,8 @@ from sklearn.neighbors import NearestNeighbors
 import geopandas as gpd
 import os
 import math
-from tqdm import tqdm
 import shutil
+from memory_profiler import profile
 
 POINT_PATH = "points/bounding_boxes_point.shp"
 BBOX_PATH = "bounding_boxes/bounding_boxes_houchuli.shp"
@@ -133,6 +133,7 @@ class ForestManager:
         }
         self.trees["angle_index"] = self.trees.index.map(angle_dict)
 
+    @profile
     def update_canopy_closure(self):
         with rasterio.open(self.raster_path) as src:
             valid_pixels = src.read(1) != src.nodata
