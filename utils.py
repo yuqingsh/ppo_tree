@@ -1,11 +1,13 @@
 import rasterio
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
+from sklearn.neighbors import BallTree
 import geopandas as gpd
 import os
 import math
 import shutil
 from memory_profiler import profile
+import time
 
 POINT_PATH = "points/bounding_boxes_point.shp"
 BBOX_PATH = "bounding_boxes/bounding_boxes_houchuli.shp"
@@ -17,13 +19,6 @@ TREE_PATH = "processed_trees.shp"
 class ForestManager:
     def __init__(self, raster_path):
         self.trees, self.bboxes = self.read_data()
-        self.trees["is_cut"] = False
-        self.calculate_crown_width()
-        self.update_angle_index()
-
-        with rasterio.open(raster_path) as src:
-            self.crs = src.crs
-            self.bounds = src.bounds
 
         temp_raster_path = os.path.join("temp", "temp_raster.tif")
 
@@ -32,6 +27,16 @@ class ForestManager:
 
         shutil.copy(raster_path, temp_raster_path)
         self.raster_path = temp_raster_path
+
+        self.read_tif_to_array()
+        self.trees["is_cut"] = False
+        self.calculate_crown_width()
+        self.update_angle_index()
+
+        with rasterio.open(raster_path) as src:
+            self.crs = src.crs
+            self.bounds = src.bounds
+            self.resolution = src.res[0]
 
         self.update_canopy_closure()
 
@@ -45,9 +50,6 @@ class ForestManager:
         )
 
     def update_angle_index(self):
-        """
-        @TODO: angle index could be nan
-        """
         n_angles = 3
         n_neighbors = 4
 
@@ -133,16 +135,12 @@ class ForestManager:
         }
         self.trees["angle_index"] = self.trees.index.map(angle_dict)
 
-    @profile
     def update_canopy_closure(self):
-        with rasterio.open(self.raster_path) as src:
-            valid_pixels = src.read(1) != src.nodata
-            total_valid_pixels = valid_pixels.sum()
-            counts = {val: (src.read(1) == val).sum() for val in range(1, 5)}
-            yubidu = sum(counts[val] for val in range(1, 4)) / sum(
-                counts[val] for val in range(1, 5)
-            )
-            self.yubidu = yubidu
+        counts = {val: (self.classification == val).sum() for val in range(1, 5)}
+        yubidu = sum(counts[val] for val in range(1, 4)) / sum(
+            counts[val] for val in range(1, 5)
+        )
+        self.yubidu = yubidu
 
     def calculate_crown_width(self):
         crown_width = []
@@ -152,15 +150,27 @@ class ForestManager:
             crown_width.append((right - left) * (top - bottom))
         self.trees["guanfu"] = crown_width
 
+    def _get_box_indices(self, tree_id):
+        bbox = self.bboxes.iloc[tree_id]["geometry"]
+        left, bottom, right, top = bbox.bounds
+        left_index = max(0, int((left - self.bounds.left) / self.resolution))
+        right_index = min(
+            self.classification.shape[1] - 1,
+            int((right - self.bounds.left) / self.resolution),
+        )
+        bottom_index = max(0, int((bottom - self.bounds.bottom) / self.resolution))
+        top_index = min(
+            self.classification.shape[0] - 1,
+            int((top - self.bounds.bottom) / self.resolution),
+        )
+        return left_index, right_index, bottom_index, top_index
+
     def harvest_tree(self, tree_id):
         self.trees.loc[tree_id, "is_cut"] = True
-        bbox_to_harvest = self.bboxes.iloc[tree_id]["geometry"]
-        with rasterio.open(self.raster_path, "r+") as src:
-            window = src.window(*bbox_to_harvest.bounds)
-            data = src.read(1, window=window)
-            mask = (data == 1) & (data != src.nodata)
-            data[mask] = 4
-            src.write(data, 1, window=window)
+        bbox_indices = self._get_box_indices(tree_id)
+        self.classification[
+            bbox_indices[2] : bbox_indices[3], bbox_indices[0] : bbox_indices[1]
+        ] = 4
         self.update_angle_index()
         self.update_canopy_closure()
 
@@ -181,14 +191,23 @@ class ForestManager:
             "guanfu_max": self.trees["guanfu"].max(),
         }
 
+    def read_tif_to_array(self):
+        with rasterio.open(self.raster_path) as src:
+            self.classification = src.read(1)
+
 
 def main():
-    forest_manager = ForestManager("classification.tif")
-    print(forest_manager.trees.head())
-    print(forest_manager.yubidu)
-    forest_manager.harvest_tree(1)
-    print(forest_manager.trees.head())
-    print(forest_manager.yubidu)
+    fm1 = ForestManager("classification.tif")
+    start_time = time.time()
+    fm1.update_angle_index()
+    end_time = time.time()
+    print(f"Time taken for update_angle_index: {end_time - start_time:.2f} seconds")
+
+    fm2 = ForestManager("classification.tif")
+    start_time = time.time()
+    fm2.update_angle_index_2()
+    end_time = time.time()
+    print(f"Time taken for update_angle_index_2: {end_time - start_time:.2f} seconds")
 
 
 if __name__ == "__main__":

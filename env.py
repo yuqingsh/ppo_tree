@@ -2,7 +2,7 @@ import gymnasium as gym
 from gymnasium import spaces
 from utils import ForestManager
 import numpy as np
-import torch
+from stable_baselines3.common.env_checker import check_env
 
 MAX_TREE_CUT = 1500
 GRID_SIZE = 20
@@ -114,9 +114,4 @@ class TreeHarvestEnv(gym.Env):
 
 if __name__ == "__main__":
     env = TreeHarvestEnv()
-    obs, _ = env.reset()
-    print("Observation stats:")
-    print("Shape:", obs.shape)
-    print("Min:", np.min(obs))
-    print("Max:", np.max(obs))
-    print("NaN count:", np.isnan(obs).sum())
+    check_env(env, warn=True, skip_render_check=True)

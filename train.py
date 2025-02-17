@@ -13,7 +13,7 @@ os.makedirs(LOG_DIR, exist_ok=True)
 np.random.seed(SEED)
 
 # 定义训练参数
-TRAIN_STEPS = 10  # 总训练步数
+TRAIN_STEPS = 100  # 总训练步数
 BATCH_SIZE = 64  # 每次更新的批大小
 LEARNING_RATE = 3e-4  # 学习率
 CHECKPOINT_FREQ = 10000  # 每隔多少步保存一次模型
@@ -43,6 +43,7 @@ model = PPO(
     verbose=1,  # 启用详细日志输出
     seed=SEED,
     tensorboard_log=LOG_DIR,
+    device="cpu",
 )
 
 # 设置检查点回调函数
