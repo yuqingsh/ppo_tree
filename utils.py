@@ -45,6 +45,9 @@ class ForestManager:
         )
 
     def update_angle_index(self):
+        """
+        @TODO: angle index could be nan
+        """
         n_angles = 3
         n_neighbors = 4
 
