@@ -6,7 +6,6 @@ import geopandas as gpd
 import os
 import math
 import shutil
-from memory_profiler import profile
 import time
 
 POINT_PATH = "points/bounding_boxes_point.shp"

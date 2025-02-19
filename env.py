@@ -82,6 +82,11 @@ class TreeHarvestEnv(gym.Env):
         return obs
 
     def _calculate_reward(self, action):
+        """
+        @TODO: angle_index does not model well, should be replaced with average
+        competition index
+
+        """
 
         tree = self._get_single_observation(action)
         health_score = tree["max_chm"] * tree["xiongjing"] * tree["guanfu"]
@@ -104,10 +109,7 @@ class TreeHarvestEnv(gym.Env):
 
     def step(self, action):
         reward = self._calculate_reward(action)
-        done = (
-            self.fm.trees["is_cut"].sum() >= MAX_TREE_CUT
-            or self.fm.yubidu < CANOPY_CLOSURE_THRESHOLD
-        )
+        done = self.fm.trees["is_cut"].sum() >= MAX_TREE_CUT
         obs = self._get_observation()
         return obs, reward, bool(done), False, {}
 
