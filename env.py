@@ -40,7 +40,7 @@ class TreeHarvestEnv(gym.Env):
                 "x": 0,
                 "y": 0,
                 "is_cut": 1,
-                "angle_index": 0,
+                "compete_index": 0,
             }
         else:
             return {
@@ -53,7 +53,8 @@ class TreeHarvestEnv(gym.Env):
                 "x": (tree["geometry"].x - self.left) / self.width,
                 "y": (tree["geometry"].y - self.bottom) / self.height,
                 "is_cut": tree["is_cut"],
-                "angle_index": tree["angle_index"],
+                "compete_index": (tree["compete_index"] - self.stats["ci_min"])
+                / (self.stats["ci_max"] - self.stats["ci_min"]),
             }
 
     def _get_observation(self):
@@ -68,7 +69,7 @@ class TreeHarvestEnv(gym.Env):
             x = tree["x"]
             y = tree["y"]
             is_cut = float(tree["is_cut"])
-            angle_index = tree["angle_index"]
+            compete_index = tree["compete_index"]
 
             assert 0 <= height <= 1, f"Height out of range: {height}"
             assert 0 <= diameter <= 1, f"Diameter out of range: {diameter}"
@@ -76,29 +77,24 @@ class TreeHarvestEnv(gym.Env):
             assert 0 <= x <= 1, f"x coordinate out of range: {x}"
             assert 0 <= y <= 1, f"y coordinate out of range: {y}"
             assert is_cut in {0, 1}, f"is_cut must be 0 or 1: {is_cut}"
-            assert 0 <= angle_index <= 1, f"Crowding index out of range: {angle_index}"
+            assert (
+                0 <= compete_index
+            ), f"Crowding index out of tree {i} of range: {compete_index}"
 
         obs = np.array(obs, dtype=np.float32)
         return obs
 
     def _calculate_reward(self, action):
-        """
-        @TODO: angle_index does not model well, should be replaced with average
-        competition index
-
-        """
+        """ """
 
         tree = self._get_single_observation(action)
-        health_score = tree["max_chm"] * tree["xiongjing"] * tree["guanfu"]
-
-        angle_index_old = self.fm.get_sum_angle_index()
+        # health_score = tree["max_chm"] * tree["xiongjing"] * tree["guanfu"]
+        compete_index = tree["compete_index"]
         self.fm.harvest_tree(action)
-        angle_index_new = self.fm.get_sum_angle_index()
-        delta_angle = angle_index_new - angle_index_old
 
-        canopy_closure_penalty = -10 if self.fm.yubidu < CANOPY_CLOSURE_THRESHOLD else 0
+        # canopy_closure_penalty = -10 if self.fm.yubidu < CANOPY_CLOSURE_THRESHOLD else 0
 
-        return -W1 * health_score + W2 * delta_angle + W3 * canopy_closure_penalty
+        return W2 * compete_index  # + W3 * canopy_closure_penalty
 
     def reset(self, seed=0):
         np.random.seed(seed)

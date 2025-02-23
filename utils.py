@@ -30,7 +30,7 @@ class ForestManager:
         self.read_tif_to_array()
         self.trees["is_cut"] = False
         self.calculate_crown_width()
-        self.update_angle_index()
+        self.update_compete_index()
 
         with rasterio.open(raster_path) as src:
             self.crs = src.crs
@@ -48,91 +48,40 @@ class ForestManager:
             bboxes,
         )
 
-    def update_angle_index(self):
-        n_angles = 3
-        n_neighbors = 4
-
-        def _dot_product(v1, v2):
-            return v1[0] * v2[0] + v1[1] * v2[1]
-
-        def _angle(v1, v2):
-            dot = _dot_product(v1, v2)
-
-            v1_mag = math.sqrt(_dot_product(v1, v1))
-            v2_mag = math.sqrt(_dot_product(v2, v2))
-            if v1_mag < 1e-6 or v2_mag < 1e-6:
-                return 0.0
-            cos_theta = dot / (v1_mag * v2_mag)
-            cos_theta = max(-1.0, min(1.0, cos_theta))
-            theta = math.acos(cos_theta)
-            cross = np.cross(v1, v2)
-            if cross < 0:
-                theta = 2 * math.pi - theta
-            return theta
+    def update_compete_index(self):
+        n_neighbors = 5
 
         coordinates_dict = {}
+        xiongjings_dict = {}
         for row in self.trees.itertuples():
             if not row.is_cut:
                 coordinates_dict[row.Index] = (row.geometry.x, row.geometry.y)
+                xiongjings_dict[row.Index] = row.xiongjing
         coordinates = list(coordinates_dict.values())
         points = np.array(coordinates)
+        xiongjings = np.array(list(xiongjings_dict.values()))
 
         if len(points) < n_neighbors:
             n_neighbors = len(points)
         nbrs = NearestNeighbors(n_neighbors=n_neighbors).fit(points)
         distances, indices = nbrs.kneighbors(points)
 
-        count_list = []
+        cis = []
         for i in range(len(points)):
-            p = points[i]
-            nearest_indices = indices[i]
+            nearest_indices = indices[i][1:]
+            nearest_distances = distances[i][1:]
 
-            vectors = points[nearest_indices] - p
-            angles = []
+            if nearest_distances.all() == 0:
+                cis.append(0)
+                continue
+
+            ci = 0
             for j in range(len(nearest_indices)):
-                ang = _angle(vectors[0], vectors[j])
-                angles.append((ang, nearest_indices[j]))
-
-            angles.sort()
-            selected_indices = [nearest_indices[0]] + [
-                idx for ang, idx in angles[1 : n_angles + 1]
-            ]
-
-            count = 0
-            num_pairs = len(selected_indices)
-            for k in range(num_pairs):
-                current_idx = selected_indices[k]
-                next_idx = selected_indices[(k + 1) % num_pairs]
-
-                v1 = points[current_idx] - p
-                v2 = points[next_idx] - p
-
-                ang = _angle(v1, v2)
-                if ang > math.radians(279):
-                    count = 10
-                    break
-                elif ang >= math.radians(81):
-                    count += 1
-
-            count_list.append(count)
-
-        count_np = np.array(count_list)
-        count_np = np.select(
-            [
-                (count_np == 3),
-                (count_np == 2),
-                (count_np == 1),
-                (count_np == 10),
-                (count_np == 4),
-            ],
-            [0.25, 0.5, 0.75, 1.0, 0.0],
-            default=count_np,
-        )
-
-        angle_dict = {
-            idx: count for idx, count in zip(coordinates_dict.keys(), count_np)
-        }
-        self.trees["angle_index"] = self.trees.index.map(angle_dict)
+                ci += xiongjings[nearest_indices[j]] / nearest_distances[j]
+            ci /= xiongjings[i]
+            cis.append(ci)
+        cis_dict = {key: value for key, value in zip(coordinates_dict.keys(), cis)}
+        self.trees["compete_index"] = self.trees.index.map(cis_dict)
 
     def update_canopy_closure(self):
         counts = {val: (self.classification == val).sum() for val in range(1, 5)}
@@ -170,15 +119,8 @@ class ForestManager:
         self.classification[
             bbox_indices[2] : bbox_indices[3], bbox_indices[0] : bbox_indices[1]
         ] = 4
-        self.update_angle_index()
+        self.update_compete_index()
         self.update_canopy_closure()
-
-    def get_sum_angle_index(self):
-        running_total = 0
-        for row in self.trees.itertuples():
-            if not row.is_cut:
-                running_total += abs(row.angle_index - 0.5)
-        return running_total
 
     def get_stats(self):
         return {
@@ -188,6 +130,8 @@ class ForestManager:
             "xiongjing_max": self.trees["xiongjing"].max(),
             "guanfu_min": self.trees["guanfu"].min(),
             "guanfu_max": self.trees["guanfu"].max(),
+            "ci_min": self.trees["compete_index"].min(),
+            "ci_max": self.trees["compete_index"].max(),
         }
 
     def read_tif_to_array(self):
@@ -197,16 +141,12 @@ class ForestManager:
 
 def main():
     fm1 = ForestManager("classification.tif")
-    start_time = time.time()
-    fm1.update_angle_index()
-    end_time = time.time()
-    print(f"Time taken for update_angle_index: {end_time - start_time:.2f} seconds")
-
-    fm2 = ForestManager("classification.tif")
-    start_time = time.time()
-    fm2.update_angle_index_2()
-    end_time = time.time()
-    print(f"Time taken for update_angle_index_2: {end_time - start_time:.2f} seconds")
+    fm1.update_compete_index()
+    print(len(fm1.trees))
+    print(fm1.trees.tail())
+    fm1.harvest_tree(1)
+    print(len(fm1.trees))
+    print(fm1.trees.tail())
 
 
 if __name__ == "__main__":
