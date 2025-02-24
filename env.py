@@ -4,11 +4,12 @@ from utils import ForestManager
 import numpy as np
 from stable_baselines3.common.env_checker import check_env
 
-MAX_TREE_CUT = 1500
-GRID_SIZE = 20
+MAX_TREE_CUT = 50
 CANOPY_CLOSURE_THRESHOLD = 0.7
-W1 = 0.3
-W2 = 0.7
+W1 = 0.2
+W2 = 0.2
+W3 = 0.2
+W4 = 0.4
 
 
 class TreeHarvestEnv(gym.Env):
@@ -78,16 +79,20 @@ class TreeHarvestEnv(gym.Env):
 
     def _calculate_reward(self, action):
         if self.fm.trees.loc[action, "is_cut"]:
-            return -10
+            return -5
 
         tree = self._get_single_observation(action)
-        health_score = tree["max_chm"] * tree["xiongjing"] * tree["guanfu"]
         compete_index = self.fm.get_compete_index(action)
         self.fm.harvest_tree(action)
 
         # canopy_closure_penalty = -10 if self.fm.yubidu < CANOPY_CLOSURE_THRESHOLD else 0
 
-        return -W1 * health_score + W2 * compete_index  # + W3 * canopy_closure_penalty
+        return (
+            W1 * (1 - tree["max_chm"])
+            + W2 * (1 - tree["xiongjing"])
+            + W3 * (1 - tree["guanfu"])
+            + W4 * compete_index
+        )
 
     def reset(self, seed=0):
         np.random.seed(seed)

@@ -13,7 +13,7 @@ os.makedirs(LOG_DIR, exist_ok=True)
 np.random.seed(SEED)
 
 # 定义训练参数
-TRAIN_STEPS = 10000  # 总训练步数
+TRAIN_STEPS = 100000  # 总训练步数
 BATCH_SIZE = 32  # 每次更新的批大小
 LEARNING_RATE = 1e-3  # 学习率
 CHECKPOINT_FREQ = 10000  # 每隔多少步保存一次模型
