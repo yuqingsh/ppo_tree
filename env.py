@@ -8,8 +8,7 @@ MAX_TREE_CUT = 1500
 GRID_SIZE = 20
 CANOPY_CLOSURE_THRESHOLD = 0.7
 W1 = 0.3
-W2 = 0.3
-W3 = 0.4
+W2 = 0.7
 
 
 class TreeHarvestEnv(gym.Env):
@@ -25,7 +24,7 @@ class TreeHarvestEnv(gym.Env):
         self.height = self.fm.bounds.top - self.fm.bounds.bottom
 
         self.observation_space = spaces.Box(
-            low=0, high=1, shape=(self.n_trees * 7,), dtype=np.float32
+            low=0, high=1, shape=(self.n_trees * 6,), dtype=np.float32
         )
 
         self.action_space = gym.spaces.Discrete(self.n_trees)
@@ -40,7 +39,6 @@ class TreeHarvestEnv(gym.Env):
                 "x": 0,
                 "y": 0,
                 "is_cut": 1,
-                "compete_index": 0,
             }
         else:
             return {
@@ -53,8 +51,6 @@ class TreeHarvestEnv(gym.Env):
                 "x": (tree["geometry"].x - self.left) / self.width,
                 "y": (tree["geometry"].y - self.bottom) / self.height,
                 "is_cut": tree["is_cut"],
-                "compete_index": (tree["compete_index"] - self.stats["ci_min"])
-                / (self.stats["ci_max"] - self.stats["ci_min"]),
             }
 
     def _get_observation(self):
@@ -69,7 +65,6 @@ class TreeHarvestEnv(gym.Env):
             x = tree["x"]
             y = tree["y"]
             is_cut = float(tree["is_cut"])
-            compete_index = tree["compete_index"]
 
             assert 0 <= height <= 1, f"Height out of range: {height}"
             assert 0 <= diameter <= 1, f"Diameter out of range: {diameter}"
@@ -77,24 +72,22 @@ class TreeHarvestEnv(gym.Env):
             assert 0 <= x <= 1, f"x coordinate out of range: {x}"
             assert 0 <= y <= 1, f"y coordinate out of range: {y}"
             assert is_cut in {0, 1}, f"is_cut must be 0 or 1: {is_cut}"
-            assert (
-                0 <= compete_index
-            ), f"Crowding index out of tree {i} of range: {compete_index}"
 
         obs = np.array(obs, dtype=np.float32)
         return obs
 
     def _calculate_reward(self, action):
-        """ """
+        if self.fm.trees.loc[action, "is_cut"]:
+            return -10
 
         tree = self._get_single_observation(action)
-        # health_score = tree["max_chm"] * tree["xiongjing"] * tree["guanfu"]
-        compete_index = tree["compete_index"]
+        health_score = tree["max_chm"] * tree["xiongjing"] * tree["guanfu"]
+        compete_index = self.fm.get_compete_index(action)
         self.fm.harvest_tree(action)
 
         # canopy_closure_penalty = -10 if self.fm.yubidu < CANOPY_CLOSURE_THRESHOLD else 0
 
-        return W2 * compete_index  # + W3 * canopy_closure_penalty
+        return -W1 * health_score + W2 * compete_index  # + W3 * canopy_closure_penalty
 
     def reset(self, seed=0):
         np.random.seed(seed)

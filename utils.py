@@ -13,6 +13,7 @@ BBOX_PATH = "bounding_boxes/bounding_boxes_houchuli.shp"
 GRID_SIZE = 20
 OUTPUT_DIR = "grids"
 TREE_PATH = "processed_trees.shp"
+AREA_WIDTH = 50
 
 
 class ForestManager:
@@ -83,6 +84,9 @@ class ForestManager:
         cis_dict = {key: value for key, value in zip(coordinates_dict.keys(), cis)}
         self.trees["compete_index"] = self.trees.index.map(cis_dict)
 
+    def get_compete_index(self, tree_id):
+        return self.trees.loc[tree_id, "compete_index"]
+
     def update_canopy_closure(self):
         counts = {val: (self.classification == val).sum() for val in range(1, 5)}
         yubidu = sum(counts[val] for val in range(1, 4)) / sum(
@@ -130,8 +134,6 @@ class ForestManager:
             "xiongjing_max": self.trees["xiongjing"].max(),
             "guanfu_min": self.trees["guanfu"].min(),
             "guanfu_max": self.trees["guanfu"].max(),
-            "ci_min": self.trees["compete_index"].min(),
-            "ci_max": self.trees["compete_index"].max(),
         }
 
     def read_tif_to_array(self):
@@ -141,12 +143,7 @@ class ForestManager:
 
 def main():
     fm1 = ForestManager("classification.tif")
-    fm1.update_compete_index()
-    print(len(fm1.trees))
-    print(fm1.trees.tail())
-    fm1.harvest_tree(1)
-    print(len(fm1.trees))
-    print(fm1.trees.tail())
+    fm1.get_area(0)
 
 
 if __name__ == "__main__":
