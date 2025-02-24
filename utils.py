@@ -8,12 +8,12 @@ import math
 import shutil
 import time
 
-POINT_PATH = "points/bounding_boxes_point.shp"
-BBOX_PATH = "bounding_boxes/bounding_boxes_houchuli.shp"
-GRID_SIZE = 20
-OUTPUT_DIR = "grids"
-TREE_PATH = "processed_trees.shp"
-AREA_WIDTH = 50
+BLOCK_X = 0
+BLOCK_Y = 0
+DIR_PATH = "grids/block_" + str(BLOCK_X) + "_" + str(BLOCK_Y) + "/"
+POINT_PATH = DIR_PATH + "points_" + str(BLOCK_X) + "_" + str(BLOCK_Y) + ".shp"
+BBOX_PATH = DIR_PATH + "boxes_" + str(BLOCK_X) + "_" + str(BLOCK_Y) + ".shp"
+TIF_PATH = DIR_PATH + "raster_" + str(BLOCK_X) + "_" + str(BLOCK_Y) + ".tif"
 
 
 class ForestManager:
