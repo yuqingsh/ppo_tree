@@ -3,6 +3,7 @@ from gymnasium import spaces
 from utils import ForestManager
 import numpy as np
 from stable_baselines3.common.env_checker import check_env
+import random
 
 MAX_TREE_CUT = 50
 CANOPY_CLOSURE_THRESHOLD = 0.7
@@ -25,7 +26,7 @@ class TreeHarvestEnv(gym.Env):
         self.height = self.fm.bounds.top - self.fm.bounds.bottom
 
         self.observation_space = spaces.Box(
-            low=0, high=1, shape=(self.n_trees * 6,), dtype=np.float32
+            low=0, high=1, shape=(self.n_trees * 5,), dtype=np.float32
         )
 
         self.action_space = gym.spaces.Discrete(self.n_trees)
@@ -39,7 +40,6 @@ class TreeHarvestEnv(gym.Env):
                 "guanfu": 0,
                 "x": 0,
                 "y": 0,
-                "is_cut": 1,
             }
         else:
             return {
@@ -51,7 +51,6 @@ class TreeHarvestEnv(gym.Env):
                 / (self.stats["guanfu_max"] - self.stats["guanfu_min"]),
                 "x": (tree["geometry"].x - self.left) / self.width,
                 "y": (tree["geometry"].y - self.bottom) / self.height,
-                "is_cut": tree["is_cut"],
             }
 
     def _get_observation(self):
@@ -65,21 +64,17 @@ class TreeHarvestEnv(gym.Env):
             crown_width = tree["guanfu"]
             x = tree["x"]
             y = tree["y"]
-            is_cut = float(tree["is_cut"])
 
             assert 0 <= height <= 1, f"Height out of range: {height}"
             assert 0 <= diameter <= 1, f"Diameter out of range: {diameter}"
             assert 0 <= crown_width <= 1, f"Crown width out of range: {crown_width}"
             assert 0 <= x <= 1, f"x coordinate out of range: {x}"
             assert 0 <= y <= 1, f"y coordinate out of range: {y}"
-            assert is_cut in {0, 1}, f"is_cut must be 0 or 1: {is_cut}"
 
         obs = np.array(obs, dtype=np.float32)
         return obs
 
     def _calculate_reward(self, action):
-        if self.fm.trees.loc[action, "is_cut"]:
-            return -5
 
         tree = self._get_single_observation(action)
         compete_index = self.fm.get_compete_index(action)
@@ -87,14 +82,15 @@ class TreeHarvestEnv(gym.Env):
 
         # canopy_closure_penalty = -10 if self.fm.yubidu < CANOPY_CLOSURE_THRESHOLD else 0
 
-        return (
+        reward = (
             W1 * (1 - tree["max_chm"])
             + W2 * (1 - tree["xiongjing"])
             + W3 * (1 - tree["guanfu"])
             + W4 * compete_index
         )
+        return reward
 
-    def reset(self, seed=0):
+    def reset(self, seed=0, options=None):
         np.random.seed(seed)
         self.fm = ForestManager("classification.tif")
 
@@ -106,6 +102,9 @@ class TreeHarvestEnv(gym.Env):
         done = self.fm.trees["is_cut"].sum() >= MAX_TREE_CUT
         obs = self._get_observation()
         return obs, reward, bool(done), False, {}
+
+    def action_masks(self):
+        return ~self.fm.trees["is_cut"].values
 
 
 if __name__ == "__main__":

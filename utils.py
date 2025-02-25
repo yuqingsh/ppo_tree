@@ -9,7 +9,7 @@ import shutil
 import time
 
 BLOCK_X = 0
-BLOCK_Y = 0
+BLOCK_Y = 1
 DIR_PATH = "grids/block_" + str(BLOCK_X) + "_" + str(BLOCK_Y) + "/"
 POINT_PATH = DIR_PATH + "points_" + str(BLOCK_X) + "_" + str(BLOCK_Y) + ".shp"
 BBOX_PATH = DIR_PATH + "boxes_" + str(BLOCK_X) + "_" + str(BLOCK_Y) + ".shp"
