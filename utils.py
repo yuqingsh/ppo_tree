@@ -17,7 +17,8 @@ TIF_PATH = DIR_PATH + "raster_" + str(BLOCK_X) + "_" + str(BLOCK_Y) + ".tif"
 
 
 class ForestManager:
-    def __init__(self, raster_path):
+    def __init__(self):
+        raster_path = TIF_PATH
         self.trees, self.bboxes = self.read_data()
 
         temp_raster_path = os.path.join("temp", "temp_raster.tif")

@@ -24,9 +24,9 @@ os.makedirs(LOG_DIR, exist_ok=True)
 np.random.seed(SEED)
 
 # 定义训练参数
-TRAIN_STEPS = 100000  # 总训练步数
+TRAIN_STEPS = 5000  # 总训练步数
 BATCH_SIZE = 32  # 每次更新的批大小
-LEARNING_RATE = 0.05  # 学习率
+LEARNING_RATE = 0.01  # 学习率
 CHECKPOINT_FREQ = 10000  # 每隔多少步保存一次模型
 
 # 创建保存模型和日志的文件夹
@@ -45,7 +45,7 @@ model = MaskablePPO(
     env,
     verbose=1,
     tensorboard_log=LOG_DIR,
-    device="cpu",
+    device="cuda",
     learning_rate=LEARNING_RATE,
     n_steps=BATCH_SIZE,
     batch_size=BATCH_SIZE,

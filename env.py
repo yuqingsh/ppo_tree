@@ -3,7 +3,6 @@ from gymnasium import spaces
 from utils import ForestManager
 import numpy as np
 from stable_baselines3.common.env_checker import check_env
-import random
 
 MAX_TREE_CUT = 50
 CANOPY_CLOSURE_THRESHOLD = 0.7
@@ -16,7 +15,7 @@ W4 = 0.4
 class TreeHarvestEnv(gym.Env):
     def __init__(self):
         super().__init__()
-        self.fm = ForestManager("classification.tif")
+        self.fm = ForestManager()
         self.stats = self.fm.get_stats()
 
         self.n_trees = len(self.fm.trees)
@@ -42,7 +41,7 @@ class TreeHarvestEnv(gym.Env):
                 "y": 0,
             }
         else:
-            return {
+            obs = {
                 "max_chm": (tree["max_chm"] - self.stats["max_chm_min"])
                 / (self.stats["max_chm_max"] - self.stats["max_chm_min"]),
                 "xiongjing": (tree["xiongjing"] - self.stats["xiongjing_min"])
@@ -52,6 +51,8 @@ class TreeHarvestEnv(gym.Env):
                 "x": (tree["geometry"].x - self.left) / self.width,
                 "y": (tree["geometry"].y - self.bottom) / self.height,
             }
+            assert np.any(obs.values() != "nan")
+            return obs
 
     def _get_observation(self):
         obs = []
@@ -86,13 +87,13 @@ class TreeHarvestEnv(gym.Env):
             W1 * (1 - tree["max_chm"])
             + W2 * (1 - tree["xiongjing"])
             + W3 * (1 - tree["guanfu"])
-            + W4 * compete_index
+            + W4 * self._sigmoid(compete_index, -1)
         )
         return reward
 
     def reset(self, seed=0, options=None):
         np.random.seed(seed)
-        self.fm = ForestManager("classification.tif")
+        self.fm = ForestManager()
 
         obs = self._get_observation()
         return obs, {}
@@ -105,6 +106,9 @@ class TreeHarvestEnv(gym.Env):
 
     def action_masks(self):
         return ~self.fm.trees["is_cut"].values
+
+    def _sigmoid(self, x, k):
+        return 1 / (1 + np.exp(k * x))
 
 
 if __name__ == "__main__":
