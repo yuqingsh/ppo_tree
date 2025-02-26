@@ -5,11 +5,11 @@ import numpy as np
 from stable_baselines3.common.env_checker import check_env
 
 MAX_TREE_CUT = 50
-CANOPY_CLOSURE_THRESHOLD = 0.7
-W1 = 0.2
-W2 = 0.2
-W3 = 0.2
-W4 = 0.4
+CANOPY_CLOSURE_THRESHOLD = 0.6
+W1 = 0.15
+W2 = 0.15
+W3 = 0.15
+W4 = 1 - W1 - W2 - W3
 
 
 class TreeHarvestEnv(gym.Env):
@@ -81,7 +81,7 @@ class TreeHarvestEnv(gym.Env):
         compete_index = self.fm.get_compete_index(action)
         self.fm.harvest_tree(action)
 
-        # canopy_closure_penalty = -10 if self.fm.yubidu < CANOPY_CLOSURE_THRESHOLD else 0
+        canopy_closure_penalty = -1 if self.fm.yubidu < CANOPY_CLOSURE_THRESHOLD else 0
 
         reward = (
             W1 * (1 - tree["max_chm"])
@@ -89,7 +89,7 @@ class TreeHarvestEnv(gym.Env):
             + W3 * (1 - tree["guanfu"])
             + W4 * self._sigmoid(compete_index, -1)
         )
-        return reward
+        return reward + canopy_closure_penalty
 
     def reset(self, seed=0, options=None):
         np.random.seed(seed)
@@ -100,7 +100,10 @@ class TreeHarvestEnv(gym.Env):
 
     def step(self, action):
         reward = self._calculate_reward(action)
-        done = self.fm.trees["is_cut"].sum() >= MAX_TREE_CUT
+        done = (
+            self.fm.trees["is_cut"].sum() >= MAX_TREE_CUT
+            or self.fm.yubidu < CANOPY_CLOSURE_THRESHOLD
+        )
         obs = self._get_observation()
         return obs, reward, bool(done), False, {}
 

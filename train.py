@@ -24,7 +24,7 @@ os.makedirs(LOG_DIR, exist_ok=True)
 np.random.seed(SEED)
 
 # 定义训练参数
-TRAIN_STEPS = 5000  # 总训练步数
+TRAIN_STEPS = 10e4  # 总训练步数
 BATCH_SIZE = 32  # 每次更新的批大小
 LEARNING_RATE = 0.01  # 学习率
 CHECKPOINT_FREQ = 10000  # 每隔多少步保存一次模型
@@ -58,6 +58,7 @@ model = MaskablePPO(
     seed=SEED,
 )
 model.learn(total_timesteps=TRAIN_STEPS, progress_bar=True)
+
 
 # 定义PPO配置
 """
